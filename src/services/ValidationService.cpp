@@ -164,10 +164,6 @@ std::vector<std::string> ValidationService::validateMetricsQueryRequest(
     const MetricsQueryRequest &request) {
     std::vector<std::string> errors;
 
-    if (request.sensorIds.empty()) {
-        errors.emplace_back("At least one sensorId parameter is required");
-    }
-
     if (request.metrics.empty()) {
         errors.emplace_back("At least one metric parameter is required");
     }

@@ -144,6 +144,7 @@ std::unordered_map<std::string, double> execAggregateQuery(
 
     sql += " GROUP BY s.external_id ORDER BY s.external_id";
 
+    // filling in the SQL prepared statements with $1,$2...N
     auto binder = *client << sql;
     binder << from << to;
     for (const auto &sensorId : sensorIds) {

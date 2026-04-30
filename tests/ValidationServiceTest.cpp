@@ -158,6 +158,21 @@ TEST(ValidationServiceTest, RejectsMetricsQueryRequestWithUnsupportedMetric) {
             std::string::npos);
 }
 
+TEST(ValidationServiceTest,
+     RejectsMetricsQueryRequestWithMoreThanOneStatistic) {
+  MetricsQueryRequest request{
+      .sensorIds = {"sensor-1"},
+      .metrics = {"temperature"},
+      .statistic = "avg,min",
+  };
+
+  const auto errors = ValidationService::validateMetricsQueryRequest(request);
+  ASSERT_FALSE(errors.empty());
+  EXPECT_NE(ValidationService::joinErrors(errors).find(
+                "Unsupported statistic 'avg,min'"),
+            std::string::npos);
+}
+
 TEST(ValidationServiceTest, RejectsMetricsQueryRequestWhenDateRangeTooLarge) {
   MetricsQueryRequest request{
       .metrics = {"temperature"},
@@ -196,17 +211,12 @@ TEST(ValidationServiceTest, MetricsQueryRequestValidWhenNoTimeRange) {
   EXPECT_TRUE(ValidationService::validateMetricsQueryRequest(request).empty());
 }
 
-TEST(ValidationServiceTest, RejectsMetricsQueryRequestWhenNoSensorSpecified) {
+TEST(ValidationServiceTest, MetricsQueryRequestValidWhenNoSensorSpecified) {
   MetricsQueryRequest request{
       .metrics = {"temperature"},
       .statistic = "avg",
   };
-
-  const auto errors = ValidationService::validateMetricsQueryRequest(request);
-  ASSERT_FALSE(errors.empty());
-  EXPECT_NE(ValidationService::joinErrors(errors).find(
-                "At least one sensorId parameter is required"),
-            std::string::npos);
+  EXPECT_TRUE(ValidationService::validateMetricsQueryRequest(request).empty());
 }
 
 TEST(ValidationServiceTest, RejectsMetricsQueryRequestWhenInvalidTimestamp) {
