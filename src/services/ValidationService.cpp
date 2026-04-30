@@ -30,6 +30,20 @@ const std::unordered_set<std::string> ValidationService::kAllowedReadingFields =
 
 namespace {
 
+/*
+@brief Validates if the given string is an ISO-8601 UTC timestamp.
+@param timestamp The string to validate.
+@return True if the string is a valid ISO-8601 UTC timestamp, false otherwise.
+
+the version of the standard library on this system (Apple Clang 17) 
+does not yet include std::chrono::parse :(
+Regex is sufficient for our current needs.
+
+Gaps: It rejects timestamps with milliseconds (e.g., 2026-04-24T10:15:00.000Z).
+It rejects UTC offsets other than Z (e.g., +00:00
+
+Fix: use std::chrono::parse when available
+*/
 bool isValidUtcTimestamp(const std::string &timestamp) {
     static const std::regex kTimestampPattern(
         R"(^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$)");
