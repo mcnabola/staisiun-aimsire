@@ -1,7 +1,11 @@
 #include "ValidationService.hpp"
 
+#include <algorithm>
+#include <ctime>
+#include <iomanip>
 #include <regex>
 #include <sstream>
+#include <string_view>
 
 const std::unordered_set<std::string> ValidationService::kSupportedMetrics = {
     "temperature",
@@ -10,10 +14,10 @@ const std::unordered_set<std::string> ValidationService::kSupportedMetrics = {
 };
 
 const std::unordered_set<std::string> ValidationService::kSupportedStatistics = {
-        "min",
-        "max",
-        "sum",
-        "avg",
+    "min",
+    "max",
+    "sum",
+    "avg",
 };
 
 const std::unordered_set<std::string> ValidationService::kAllowedReadingFields = {
@@ -32,8 +36,31 @@ bool isValidUtcTimestamp(const std::string &timestamp) {
     return std::regex_match(timestamp, kTimestampPattern);
 }
 
-bool isMetricField(const std::string &fieldName) {
-    return fieldName == "temperature" || fieldName == "humidity" || fieldName == "windSpeed";
+std::optional<std::time_t> parseUtcTimestamp(const std::string &timestamp) {
+    if (!isValidUtcTimestamp(timestamp)) {
+        return std::nullopt;
+    }
+
+    std::tm parsed{};
+    std::istringstream stream(timestamp);
+    stream >> std::get_time(&parsed, "%Y-%m-%dT%H:%M:%SZ");
+    if (stream.fail()) {
+        return std::nullopt;
+    }
+
+    return timegm(&parsed);
+}
+
+std::vector<std::string> split(const std::string &s, char delimiter) {
+    std::vector<std::string> tokens;
+    std::string token;
+    std::istringstream tokenStream(s);
+    while (std::getline(tokenStream, token, delimiter)) {
+        if (!token.empty()) {
+            tokens.push_back(token);
+        }
+    }
+    return tokens;
 }
 
 }  // namespace
@@ -73,7 +100,7 @@ std::vector<std::string> ValidationService::validateCreateReadingRequest(const J
 
     bool hasAnyMetric = false;
     for (const auto &memberName : payload.getMemberNames()) {
-        if (!isMetricField(memberName)) {
+        if (!isSupportedMetric(memberName)) {
             continue;
         }
 
@@ -110,6 +137,89 @@ CreateReadingRequest ValidationService::buildCreateReadingRequest(const Json::Va
     }
 
     return request;
+}
+
+MetricsQueryRequest ValidationService::buildMetricsQueryRequest(
+    const drogon::HttpRequestPtr &request) {
+    MetricsQueryRequest query{
+        .sensorIds = split(request->getParameter("sensorId"), ','),
+        .metrics = split(request->getParameter("metric"), ','),
+        .statistic = request->getParameter("stat"),
+        .from = std::nullopt,
+        .to = std::nullopt,
+    };
+
+    if (const auto from = request->getParameter("from"); !from.empty()) {
+        query.from = from;
+    }
+
+    if (const auto to = request->getParameter("to"); !to.empty()) {
+        query.to = to;
+    }
+
+    return query;
+}
+
+std::vector<std::string> ValidationService::validateMetricsQueryRequest(
+    const MetricsQueryRequest &request) {
+    std::vector<std::string> errors;
+
+    if (request.sensorIds.empty()) {
+        errors.emplace_back("At least one sensorId parameter is required");
+    }
+
+    if (request.metrics.empty()) {
+        errors.emplace_back("At least one metric parameter is required");
+    }
+
+    for (const auto &metric : request.metrics) {
+        if (!isSupportedMetric(metric)) {
+            errors.emplace_back("Unsupported metric '" + metric + "'");
+        }
+    }
+
+    if (request.statistic.empty()) {
+        errors.emplace_back("Query parameter 'stat' is required");
+    } else if (!isSupportedStatistic(request.statistic)) {
+        errors.emplace_back("Unsupported statistic '" + request.statistic + "'");
+    }
+
+    const bool hasFrom = request.from.has_value();
+    const bool hasTo = request.to.has_value();
+    if (hasFrom != hasTo) {
+        errors.emplace_back("Query parameters 'from' and 'to' must be provided together");
+    }
+
+    if (hasFrom && hasTo) {
+        const auto parsedFrom = parseUtcTimestamp(request.from.value());
+        const auto parsedTo = parseUtcTimestamp(request.to.value());
+
+        if (!parsedFrom.has_value()) {
+            errors.emplace_back("Query parameter 'from' must be an ISO-8601 UTC timestamp");
+        }
+        if (!parsedTo.has_value()) {
+            errors.emplace_back("Query parameter 'to' must be an ISO-8601 UTC timestamp");
+        }
+
+        if (parsedFrom.has_value() && parsedTo.has_value()) {
+            if (parsedFrom.value() >= parsedTo.value()) {
+                errors.emplace_back("Query parameter 'from' must be earlier than 'to'");
+            } else {
+                const auto durationSeconds = parsedTo.value() - parsedFrom.value();
+                constexpr std::time_t kOneDaySeconds = 24 * 60 * 60;
+                constexpr std::time_t kMaxRangeSeconds = 31 * kOneDaySeconds;
+
+                if (durationSeconds < kOneDaySeconds) {
+                    errors.emplace_back("Explicit date range must be at least 1 day");
+                }
+                if (durationSeconds > kMaxRangeSeconds) {
+                    errors.emplace_back("Explicit date range must be at most 31 days");
+                }
+            }
+        }
+    }
+
+    return errors;
 }
 
 std::string ValidationService::joinErrors(const std::vector<std::string> &errors) {

@@ -1,11 +1,14 @@
 #pragma once
 
 #include "models/CreateReadingRequest.hpp"
+#include "models/MetricsQueryRequest.hpp"
 
+#include <drogon/HttpRequest.h>
 #include <json/value.h>
 
 #include <string>
 #include <unordered_set>
+#include <unordered_map>
 #include <vector>
 
 class ValidationService {
@@ -14,6 +17,9 @@ class ValidationService {
     static bool isSupportedStatistic(const std::string &statisticName);
     static std::vector<std::string> validateCreateReadingRequest(const Json::Value &payload);
     static CreateReadingRequest buildCreateReadingRequest(const Json::Value &payload);
+    static MetricsQueryRequest buildMetricsQueryRequest(const drogon::HttpRequestPtr &request);
+    static std::vector<std::string> validateMetricsQueryRequest(
+        const MetricsQueryRequest &request);
     static std::string joinErrors(const std::vector<std::string> &errors);
 
   private:

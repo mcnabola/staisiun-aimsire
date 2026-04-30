@@ -68,6 +68,7 @@ add_executable(${PROJECT_NAME}
     src/controllers/MetricsController.cpp
     src/services/ValidationService.cpp
     src/services/ReadingService.cpp
+    src/services/MetricsService.cpp
     src/repositories/ReadingRepository.cpp
 )
 
@@ -100,9 +101,12 @@ if(BUILD_TESTING)
     add_executable(${PROJECT_NAME}_tests
         tests/ValidationServiceTest.cpp
         tests/ReadingControllerTest.cpp
+        tests/MetricsControllerTest.cpp
         src/services/ValidationService.cpp
         src/controllers/ReadingController.cpp
         src/services/ReadingService.cpp
+        src/controllers/MetricsController.cpp
+        src/services/MetricsService.cpp
         src/repositories/ReadingRepository.cpp
     )
 
@@ -125,6 +129,7 @@ if(BUILD_TESTING)
         src/controllers/MetricsController.cpp
         src/services/ValidationService.cpp
         src/services/ReadingService.cpp
+        src/services/MetricsService.cpp
         src/repositories/ReadingRepository.cpp
     )
 

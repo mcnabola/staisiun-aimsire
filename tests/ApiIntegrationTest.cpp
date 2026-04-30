@@ -46,10 +46,12 @@ unsigned short getenvU16OrDefault(const char *name, unsigned short defaultValue)
 }
 
 bool shouldRunIntegrationTests() {
-    if (const auto *value = std::getenv("WEATHER_DATA_RUN_DB_TESTS")) {
-        return std::string(value) == "1";
-    }
-    return false;
+    return true;
+    //TODO: document
+    // if (const auto *value = std::getenv("WEATHER_DATA_RUN_DB_TESTS")) {
+    //     return std::string(value) == "1";
+    // }
+    // return false;
 }
 
 IntegrationConfig loadConfig() {
@@ -263,4 +265,121 @@ TEST_F(ApiIntegrationTest, PostReadingsRejectsInvalidPayloadWithoutPersistingRow
     EXPECT_EQ(counts[0]["reading_count"].as<long long>(), 0);
 }
 
+TEST_F(ApiIntegrationTest, GetMetricsReturnsAggregatedAverageForDateRange) {
+    auto dbClient = drogon::app().getDbClient();
+    dbClient->execSqlSync(
+        "INSERT INTO sensors (external_id) VALUES ($1), ($2)",
+        "sensor-1",
+        "sensor-2");
+    dbClient->execSqlSync(R"(
+        INSERT INTO readings (sensor_id, recorded_at, temperature, humidity, wind_speed)
+        SELECT id, $2::timestamptz, $3, $4, $5 FROM sensors WHERE external_id = $1
+    )",
+                          "sensor-1",
+                          "2026-04-01T00:00:00Z",
+                          10.0,
+                          50.0,
+                          nullptr);
+    dbClient->execSqlSync(R"(
+        INSERT INTO readings (sensor_id, recorded_at, temperature, humidity, wind_speed)
+        SELECT id, $2::timestamptz, $3, $4, $5 FROM sensors WHERE external_id = $1
+    )",
+                          "sensor-1",
+                          "2026-04-02T00:00:00Z",
+                          20.0,
+                          70.0,
+                          nullptr);
+    dbClient->execSqlSync(R"(
+        INSERT INTO readings (sensor_id, recorded_at, temperature, humidity, wind_speed)
+        SELECT id, $2::timestamptz, $3, $4, $5 FROM sensors WHERE external_id = $1
+    )",
+                          "sensor-1",
+                          "2026-04-01T12:00:00Z",
+                          15.0,
+                          60.0,
+                          nullptr);
+    dbClient->execSqlSync(R"(
+        INSERT INTO readings (sensor_id, recorded_at, temperature, humidity, wind_speed)
+        SELECT id, $2::timestamptz, $3, $4, $5 FROM sensors WHERE external_id = $1
+    )",
+                          "sensor-2",
+                          "2026-04-02T00:00:00Z",
+                          30.0,
+                          80.0,
+                          nullptr);
+
+    const auto config = loadConfig();
+    auto client =
+        drogon::HttpClient::newHttpClient("http://127.0.0.1:" + std::to_string(config.apiPort));
+
+    auto request = drogon::HttpRequest::newHttpRequest();
+    request->setMethod(drogon::Get);
+    request->setPath(
+        "/api/v1/metrics?sensorId=sensor-1,sensor-2&metric=temperature,humidity&stat=avg&from=2026-04-01T00:00:00Z"
+        "&to=2026-04-02T00:00:00Z");
+
+    const auto [result, response] = client->sendRequest(request, 5.0);
+    ASSERT_EQ(result, drogon::ReqResult::Ok);
+    ASSERT_TRUE(response != nullptr);
+    EXPECT_EQ(response->statusCode(), drogon::k200OK);
+
+    const auto json = response->getJsonObject();
+    ASSERT_TRUE(json != nullptr);
+    EXPECT_EQ((*json)["statistic"].asString(), "avg");
+    ASSERT_EQ((*json)["results"].size(), 2);
+    EXPECT_EQ((*json)["results"][0]["sensorId"].asString(), "sensor-1");
+    EXPECT_DOUBLE_EQ((*json)["results"][0]["metrics"]["temperature"].asDouble(), 15.0);
+    EXPECT_DOUBLE_EQ((*json)["results"][0]["metrics"]["humidity"].asDouble(), 60.0);
+    EXPECT_EQ((*json)["results"][1]["sensorId"].asString(), "sensor-2");
+    EXPECT_DOUBLE_EQ((*json)["results"][1]["metrics"]["temperature"].asDouble(), 30.0);
+    EXPECT_DOUBLE_EQ((*json)["results"][1]["metrics"]["humidity"].asDouble(), 80.0);
+}
+
+TEST_F(ApiIntegrationTest, GetMetricsUsesLatestTimestampWhenDateRangeIsOmitted) {
+    auto dbClient = drogon::app().getDbClient();
+    dbClient->execSqlSync("INSERT INTO sensors (external_id) VALUES ($1)", "sensor-1");
+    dbClient->execSqlSync(R"(
+        INSERT INTO readings (sensor_id, recorded_at, temperature, humidity, wind_speed)
+        SELECT id, $2::timestamptz, $3, $4, $5 FROM sensors WHERE external_id = $1
+    )",
+                          "sensor-1",
+                          "2026-04-01T00:00:00Z",
+                          10.0,
+                          50.0,
+                          nullptr);
+    dbClient->execSqlSync(R"(
+        INSERT INTO readings (sensor_id, recorded_at, temperature, humidity, wind_speed)
+        SELECT id, $2::timestamptz, $3, $4, $5 FROM sensors WHERE external_id = $1
+    )",
+                          "sensor-1",
+                          "2026-04-03T00:00:00Z",
+                          40.0,
+                          90.0,
+                          nullptr);
+
+    const auto config = loadConfig();
+    auto client =
+        drogon::HttpClient::newHttpClient("http://127.0.0.1:" + std::to_string(config.apiPort));
+
+    auto request = drogon::HttpRequest::newHttpRequest();
+    request->setMethod(drogon::Get);
+    request->setPath("/api/v1/metrics?metric=temperature&stat=max&sensorId=sensor-1");
+
+    const auto [result, response] = client->sendRequest(request, 5.0);
+    ASSERT_EQ(result, drogon::ReqResult::Ok);
+    ASSERT_TRUE(response != nullptr);
+    EXPECT_EQ(response->statusCode(), drogon::k200OK);
+
+    const auto json = response->getJsonObject();
+    ASSERT_TRUE(json != nullptr);
+    EXPECT_EQ((*json)["from"].asString(), "2026-04-03T00:00:00Z");
+    EXPECT_EQ((*json)["to"].asString(), "2026-04-03T00:00:00Z");
+    ASSERT_EQ((*json)["results"].size(), 1);
+    EXPECT_DOUBLE_EQ((*json)["results"][0]["metrics"]["temperature"].asDouble(), 40.0);
+}
+
 }  // namespace
+/* TODO: 
+what happens if no data in range
+what happens if no data in sensor
+*/
