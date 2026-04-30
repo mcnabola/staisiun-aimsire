@@ -52,3 +52,4 @@ _deps/
 *.swo
 *.user
 .clangd/
+.cache/
