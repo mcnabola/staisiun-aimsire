@@ -352,6 +352,57 @@ TEST_F(ApiIntegrationTest, GetMetricsReturnsAverageForAllSensorsWhenNoSensorId) 
     expectMetric((*json)["results"], "sensor-2", "humidity", 80.0);
 }
 
+TEST_F(ApiIntegrationTest, GetMetricsReturnsAggregatedSumForDateRange) {
+    createSensor("sensor-1");
+    addReading("sensor-1", "2026-04-01T00:00:00Z", 10.0, 50.0);
+    addReading("sensor-1", "2026-04-02T00:00:00Z", 20.0, 70.0);
+    addReading("sensor-1", "2026-04-01T12:00:00Z", 15.0, 60.0);
+
+    auto response = get("/api/v1/metrics?sensorId=sensor-1&metric=temperature,humidity&stat=sum"
+                        "&from=2026-04-01T00:00:00Z&to=2026-04-02T00:00:00Z");
+    expectStatus(response, drogon::k200OK);
+
+    const auto json = response->getJsonObject();
+    EXPECT_EQ((*json)["statistic"].asString(), "sum");
+    ASSERT_EQ((*json)["results"].size(), 1);
+    expectMetric((*json)["results"], "sensor-1", "temperature", 45.0);
+    expectMetric((*json)["results"], "sensor-1", "humidity", 180.0);
+}
+
+TEST_F(ApiIntegrationTest, GetMetricsReturnsAggregatedMinForDateRange) {
+    createSensor("sensor-1");
+    addReading("sensor-1", "2026-04-01T00:00:00Z", 10.0, 50.0);
+    addReading("sensor-1", "2026-04-02T00:00:00Z", 20.0, 70.0);
+    addReading("sensor-1", "2026-04-01T12:00:00Z", 15.0, 60.0);
+
+    auto response = get("/api/v1/metrics?metric=temperature,humidity&stat=min"
+                        "&from=2026-04-01T00:00:00Z&to=2026-04-02T00:00:00Z");
+    expectStatus(response, drogon::k200OK);
+
+    const auto json = response->getJsonObject();
+    EXPECT_EQ((*json)["statistic"].asString(), "min");
+    ASSERT_EQ((*json)["results"].size(), 1);
+    expectMetric((*json)["results"], "sensor-1", "temperature", 10.0);
+    expectMetric((*json)["results"], "sensor-1", "humidity", 50.0);
+}
+
+TEST_F(ApiIntegrationTest, GetMetricsReturnsMaxForDateRange) {
+    createSensor("sensor-1");
+    addReading("sensor-1", "2026-04-01T00:00:00Z", 20.0, 50.0);
+    addReading("sensor-1", "2026-04-02T00:00:00Z", 10.0, 70.0);
+    addReading("sensor-1", "2026-04-01T12:00:00Z", 15.0, 60.0);
+
+    auto response = get("/api/v1/metrics?metric=temperature,humidity&stat=max"
+                        "&from=2026-04-01T00:00:00Z&to=2026-04-02T00:00:00Z");
+    expectStatus(response, drogon::k200OK);
+
+    const auto json = response->getJsonObject();
+    EXPECT_EQ((*json)["statistic"].asString(), "max");
+    ASSERT_EQ((*json)["results"].size(), 1);
+    expectMetric((*json)["results"], "sensor-1", "temperature", 20.0);
+    expectMetric((*json)["results"], "sensor-1", "humidity", 70.0);
+}
+
 TEST_F(ApiIntegrationTest, GetMetricsUsesLatestTimestampWhenDateRangeIsOmitted) {
     createSensor("sensor-1");
     addReading("sensor-1", "2026-04-01T00:00:00Z", 10.0, 50.0);
@@ -365,6 +416,19 @@ TEST_F(ApiIntegrationTest, GetMetricsUsesLatestTimestampWhenDateRangeIsOmitted) 
     EXPECT_EQ((*json)["to"].asString(), "2026-04-03T00:00:00Z");
     ASSERT_EQ((*json)["results"].size(), 1);
     expectMetric((*json)["results"], "sensor-1", "temperature", 40.0);
+}
+
+TEST_F(ApiIntegrationTest, GetMetricsReturnsCorrectlyWhenNoDataFound) {
+    createSensor("sensor-1");
+    addReading("sensor-1", "2026-04-01T00:00:00Z", 10.0, 50.0);
+    addReading("sensor-1", "2026-04-03T00:00:00Z", 40.0, 90.0);
+
+    auto response = get("/api/v1/metrics?metric=temperature&stat=max&sensorId=sensor-2");
+    expectStatus(response, drogon::k200OK);
+
+    const auto json = response->getJsonObject();
+    EXPECT_EQ((*json)["statistic"].asString(), "max");
+    ASSERT_EQ((*json)["results"].size(), 0);
 }
 
 }  // namespace
