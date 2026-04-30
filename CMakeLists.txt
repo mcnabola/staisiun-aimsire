@@ -63,7 +63,6 @@ verify_drogon_postgresql_support()
 
 add_executable(${PROJECT_NAME}
     src/main.cpp
-    src/controllers/HealthController.cpp
     src/controllers/ReadingController.cpp
     src/controllers/MetricsController.cpp
     src/services/ValidationService.cpp
@@ -124,7 +123,6 @@ if(BUILD_TESTING)
 
     add_executable(${PROJECT_NAME}_integration_tests
         tests/ApiIntegrationTest.cpp
-        src/controllers/HealthController.cpp
         src/controllers/ReadingController.cpp
         src/controllers/MetricsController.cpp
         src/services/ValidationService.cpp
