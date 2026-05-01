@@ -267,6 +267,55 @@ TEST_F(ApiIntegrationTest, PostReadingsPersistsRowInDatabase) {
     EXPECT_TRUE(dbResult[0]["wind_speed"].isNull());
 }
 
+TEST_F(ApiIntegrationTest, PostReadingsReturnsValidReadingId) {
+    Json::Value payload;
+    payload["sensorId"] = "sensor-1";
+    payload["timestamp"] = "2026-04-27T10:15:00Z";
+    payload["temperature"] = 22.5;
+
+    auto response = post("/api/v1/readings", payload);
+    expectStatus(response, drogon::k201Created);
+
+    const auto json = response->getJsonObject();
+    const std::string readingId = (*json)["readingId"].asString();
+    ASSERT_FALSE(readingId.empty());
+
+    // Verify the reading exists in the database using the returned readingId
+    const auto dbResult = drogon::app().getDbClient()->execSqlSync(
+        "SELECT id::text FROM readings WHERE id = $1::uuid", readingId);
+
+    ASSERT_EQ(dbResult.size(), 1);
+    EXPECT_EQ(dbResult[0]["id"].as<std::string>(), readingId);
+}
+
+TEST_F(ApiIntegrationTest, PostReadingsIsDuplicateAndNotIdempotent) {
+    Json::Value payload;
+    payload["sensorId"] = "sensor-1";
+    payload["timestamp"] = "2026-04-27T10:15:00Z";
+    payload["temperature"] = 22.5;
+
+    // Send first request
+    auto response1 = post("/api/v1/readings", payload);
+    expectStatus(response1, drogon::k201Created);
+    const std::string id1 = (*response1->getJsonObject())["readingId"].asString();
+
+    // Send identical second request
+    auto response2 = post("/api/v1/readings", payload);
+    expectStatus(response2, drogon::k201Created);
+    const std::string id2 = (*response2->getJsonObject())["readingId"].asString();
+
+    // Verify they are different readings
+    EXPECT_NE(id1, id2);
+
+    // Verify both exist in the database
+    const auto dbResult = drogon::app().getDbClient()->execSqlSync(
+        "SELECT COUNT(*) as count FROM readings WHERE sensor_id = "
+        "(SELECT id FROM sensors WHERE external_id = 'sensor-1')");
+    
+    ASSERT_EQ(dbResult.size(), 1);
+    EXPECT_EQ(dbResult[0]["count"].as<long long>(), 2);
+}
+
 TEST_F(ApiIntegrationTest, PostReadingsRejectsInvalidPayloadWithoutPersistingRows) {
     Json::Value payload;
     payload["sensorId"] = "sensor-1";
