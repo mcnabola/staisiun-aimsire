@@ -49,7 +49,7 @@ void MetricsController::getMetrics(
         body["error"]["message"] = error.what();
 
         auto response = drogon::HttpResponse::newHttpJsonResponse(body);
-        response->setStatusCode(drogon::k400BadRequest);
+        response->setStatusCode(drogon::k422UnprocessableEntity);
         callback(response);
     } catch (const std::exception &error) {
         Json::Value body;

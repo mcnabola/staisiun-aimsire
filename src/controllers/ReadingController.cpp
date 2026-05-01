@@ -37,7 +37,7 @@ void ReadingController::createReading(
         body["error"]["message"] = error.what();
 
         auto response = drogon::HttpResponse::newHttpJsonResponse(body);
-        response->setStatusCode(drogon::k400BadRequest);
+        response->setStatusCode(drogon::k422UnprocessableEntity);
         callback(response);
     } catch (const drogon::orm::DrogonDbException &error) {
         Json::Value body;

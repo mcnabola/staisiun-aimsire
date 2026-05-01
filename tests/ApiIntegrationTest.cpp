@@ -294,7 +294,7 @@ TEST_F(ApiIntegrationTest, PostReadingsRejectsInvalidPayloadWithoutPersistingRow
     payload["timestamp"] = "2026-04-27T10:15:00Z";
 
     auto response = post("/api/v1/readings", payload);
-    expectStatus(response, drogon::k400BadRequest);
+    expectStatus(response, drogon::k422UnprocessableEntity);
 
     const auto json = response->getJsonObject();
     EXPECT_EQ((*json)["error"]["code"].asString(), "VALIDATION_ERROR");

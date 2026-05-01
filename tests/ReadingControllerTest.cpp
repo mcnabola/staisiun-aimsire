@@ -41,7 +41,7 @@ TEST(ReadingControllerTest, ReturnsBadRequestWhenValidationFails) {
         });
 
     ASSERT_TRUE(response != nullptr);
-    EXPECT_EQ(response->statusCode(), drogon::k400BadRequest);
+    EXPECT_EQ(response->statusCode(), drogon::k422UnprocessableEntity);
 
     const auto json = response->getJsonObject();
     ASSERT_TRUE(json != nullptr);
