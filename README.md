@@ -102,6 +102,8 @@ Initial schema: `001_initial_schema.sql` (sensors and readings tables).
 
 ```bash
 ctest --test-dir build
+or
+./build/weather_data_tests
 ```
 
 These cover:
