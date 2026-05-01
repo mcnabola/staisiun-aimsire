@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <string>
 #include <thread>
+#include "services/DatabaseMigrationService.hpp"
 
 namespace {
 
@@ -66,30 +67,8 @@ IntegrationConfig loadConfig() {
 }
 
 void applySchema(const drogon::orm::DbClientPtr &dbClient) {
-    dbClient->execSqlSync(R"(CREATE EXTENSION IF NOT EXISTS "pgcrypto")");
-    dbClient->execSqlSync(R"(
-        CREATE TABLE IF NOT EXISTS sensors (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            external_id TEXT NOT NULL UNIQUE,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-    )");
-    dbClient->execSqlSync(R"(
-        CREATE TABLE IF NOT EXISTS readings (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            sensor_id UUID NOT NULL REFERENCES sensors(id),
-            recorded_at TIMESTAMPTZ NOT NULL,
-            temperature DOUBLE PRECISION NULL,
-            humidity DOUBLE PRECISION NULL,
-            wind_speed DOUBLE PRECISION NULL,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-    )");
-    dbClient->execSqlSync(
-        "CREATE INDEX IF NOT EXISTS idx_readings_sensor_recorded_at "
-        "ON readings(sensor_id, recorded_at)");
-    dbClient->execSqlSync(
-        "CREATE INDEX IF NOT EXISTS idx_readings_recorded_at ON readings(recorded_at)");
+    std::string migrationsPath = WEATHER_DATA_SOURCE_DIR "/db/migrations";
+    weather_data::services::DatabaseMigrationService::runMigrations(dbClient, migrationsPath);
 }
 
 void cleanDatabase(const drogon::orm::DbClientPtr &dbClient) {
