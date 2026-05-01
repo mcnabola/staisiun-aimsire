@@ -403,19 +403,51 @@ TEST_F(ApiIntegrationTest, GetMetricsReturnsMaxForDateRange) {
     expectMetric((*json)["results"], "sensor-1", "humidity", 70.0);
 }
 
-TEST_F(ApiIntegrationTest, GetMetricsUsesLatestTimestampWhenDateRangeIsOmitted) {
+TEST_F(ApiIntegrationTest, GetMetricsUses24HourWindowWhenDateRangeIsOmitted) {
     createSensor("sensor-1");
-    addReading("sensor-1", "2026-04-01T00:00:00Z", 10.0, 50.0);
-    addReading("sensor-1", "2026-04-03T00:00:00Z", 40.0, 90.0);
+    // Latest is 2026-04-03T12:00:00Z
+    // 24h window starts at 2026-04-02T12:00:00Z
+    addReading("sensor-1", "2026-04-02T11:00:00Z", 10.0, 50.0);  // Out (too old)
+    addReading("sensor-1", "2026-04-02T13:00:00Z", 20.0, 60.0);  // In
+    addReading("sensor-1", "2026-04-03T12:00:00Z", 30.0, 70.0);  // In (Latest)
 
-    auto response = get("/api/v1/metrics?metric=temperature&stat=max&sensorId=sensor-1");
+    auto response = get("/api/v1/metrics?metric=temperature&stat=avg&sensorId=sensor-1");
     expectStatus(response, drogon::k200OK);
 
     const auto json = response->getJsonObject();
-    EXPECT_EQ((*json)["from"].asString(), "2026-04-03T00:00:00Z");
-    EXPECT_EQ((*json)["to"].asString(), "2026-04-03T00:00:00Z");
+    EXPECT_EQ((*json)["from"].asString(), "2026-04-02T12:00:00Z");
+    EXPECT_EQ((*json)["to"].asString(), "2026-04-03T12:00:00Z");
+
     ASSERT_EQ((*json)["results"].size(), 1);
-    expectMetric((*json)["results"], "sensor-1", "temperature", 40.0);
+    // Average of 20 and 30 is 25
+    expectMetric((*json)["results"], "sensor-1", "temperature", 25.0);
+}
+
+TEST_F(ApiIntegrationTest, GetMetricsIncludesMultipleSensorsIn24HourWindow) {
+    createSensor("sensor-old");
+    createSensor("sensor-new");
+
+    // sensor-new's latest is at 11:00
+    // 24h window is [yesterday 11:00, today 11:00]
+    addReading("sensor-new", "2026-04-01T11:00:00Z", 20.0, 60.0);
+
+    // sensor-old's reading is at 10:00 (1 hour before sensor-new's latest)
+    // This IS within the 24h window!
+    addReading("sensor-old", "2026-04-01T10:00:00Z", 10.0, 50.0);
+
+    // An even older reading for sensor-old (25 hours before sensor-new's latest)
+    addReading("sensor-old", "2026-03-31T10:00:00Z", 5.0, 40.0);  // Out
+
+    auto response = get("/api/v1/metrics?metric=temperature&stat=avg&sensorId=sensor-old,sensor-new");
+    expectStatus(response, drogon::k200OK);
+
+    const auto json = response->getJsonObject();
+    EXPECT_EQ((*json)["from"].asString(), "2026-03-31T11:00:00Z");
+    EXPECT_EQ((*json)["to"].asString(), "2026-04-01T11:00:00Z");
+
+    ASSERT_EQ((*json)["results"].size(), 2);
+    expectMetric((*json)["results"], "sensor-new", "temperature", 20.0);
+    expectMetric((*json)["results"], "sensor-old", "temperature", 10.0);
 }
 
 TEST_F(ApiIntegrationTest, GetMetricsReturnsCorrectlyWhenNoDataFound) {

@@ -74,12 +74,17 @@ std::string statisticToSql(const std::string &statistic) {
     return "AVG";
 }
 
-std::optional<std::string> execLatestTimestampQuery(const drogon::orm::DbClientPtr &client,
-                                                    const std::vector<std::string> &sensorIds) {
-    std::string sql = "SELECT TO_CHAR(MAX(r.recorded_at) AT TIME ZONE 'UTC', "
-                      "'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS latest "
-                      "FROM readings r "
-                      "JOIN sensors s ON s.id = r.sensor_id";
+std::optional<std::pair<std::string, std::string>> resolveLatestRange(
+    const drogon::orm::DbClientPtr &client, const std::vector<std::string> &sensorIds) {
+
+    std::string sql =
+        "SELECT "
+        "TO_CHAR(MAX(r.recorded_at) AT TIME ZONE 'UTC' - INTERVAL '24 hours', "
+        "'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS start_range, "
+        "TO_CHAR(MAX(r.recorded_at) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS "
+        "end_range "
+        "FROM readings r "
+        "JOIN sensors s ON s.id = r.sensor_id";
 
     if (!sensorIds.empty()) {
         sql += " WHERE s.external_id IN (";
@@ -104,11 +109,12 @@ std::optional<std::string> execLatestTimestampQuery(const drogon::orm::DbClientP
     };
     binder.exec();
 
-    if (result.empty() || result[0]["latest"].isNull()) {
+    if (result.empty() || result[0]["end_range"].isNull()) {
         return std::nullopt;
     }
 
-    return result[0]["latest"].as<std::string>();
+    return std::make_pair(result[0]["start_range"].as<std::string>(),
+                          result[0]["end_range"].as<std::string>());
 }
 
 std::unordered_map<std::string, double> execAggregateQuery(
@@ -191,8 +197,8 @@ MetricsQueryResult ReadingRepository::queryMetrics(const MetricsQueryRequest &re
     std::optional<std::string> resolvedTo = request.to;
 
     if (!resolvedFrom.has_value() || !resolvedTo.has_value()) {
-        const auto latestTimestamp = execLatestTimestampQuery(dbClient, request.sensorIds);
-        if (!latestTimestamp.has_value()) {
+        const auto latestRange = resolveLatestRange(dbClient, request.sensorIds);
+        if (!latestRange.has_value()) {
             return MetricsQueryResult{
                 .statistic = request.statistic,
                 .from = std::nullopt,
@@ -201,8 +207,8 @@ MetricsQueryResult ReadingRepository::queryMetrics(const MetricsQueryRequest &re
             };
         }
 
-        resolvedFrom = latestTimestamp;
-        resolvedTo = latestTimestamp;
+        resolvedFrom = latestRange->first;
+        resolvedTo = latestRange->second;
     }
 
     std::unordered_map<std::string, SensorMetricsResult> resultsBySensor;
