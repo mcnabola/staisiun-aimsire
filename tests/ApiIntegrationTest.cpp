@@ -47,12 +47,8 @@ unsigned short getenvU16OrDefault(const char *name, unsigned short defaultValue)
 }
 
 bool shouldRunIntegrationTests() {
+    // turn on/off integration tests now
     return true;
-    //TODO: document
-    // if (const auto *value = std::getenv("WEATHER_DATA_RUN_DB_TESTS")) {
-    //     return std::string(value) == "1";
-    // }
-    // return false;
 }
 
 IntegrationConfig loadConfig() {

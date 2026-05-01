@@ -1,6 +1,7 @@
 #include "ValidationService.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <ctime>
 #include <iomanip>
 #include <regex>
@@ -121,6 +122,8 @@ std::vector<std::string> ValidationService::validateCreateReadingRequest(const J
         hasAnyMetric = true;
         if (!payload[memberName].isNumeric()) {
             errors.emplace_back("Field '" + memberName + "' must be numeric when provided");
+        } else if (!std::isfinite(payload[memberName].asDouble())) {
+            errors.emplace_back("Field '" + memberName + "' must be a finite number");
         }
     }
 

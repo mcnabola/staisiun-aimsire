@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 #include <json/json.h>
+#include <limits>
 
 TEST(ValidationServiceTest, SupportsKnownMetrics) {
   EXPECT_TRUE(ValidationService::isSupportedMetric("temperature"));
@@ -70,6 +71,69 @@ TEST(ValidationServiceTest, RejectsCreateReadingRequestWithInvalidTimestamp) {
   const auto errors = ValidationService::validateCreateReadingRequest(payload);
   ASSERT_FALSE(errors.empty());
   EXPECT_NE(ValidationService::joinErrors(errors).find("Field 'timestamp'"),
+            std::string::npos);
+}
+
+TEST(ValidationServiceTest,
+     ValidatesCreateReadingRequestWithExtremeNumericValues) {
+  Json::Value payload;
+  payload["sensorId"] = "sensor-1";
+  payload["timestamp"] = "2026-04-25T10:15:00Z";
+
+  // Max possible double
+  payload["temperature"] = std::numeric_limits<double>::max();
+  // Smallest positive double (closest to zero)
+  payload["humidity"] = std::numeric_limits<double>::min();
+  // Most negative double
+  payload["windSpeed"] = std::numeric_limits<double>::lowest();
+
+  EXPECT_TRUE(ValidationService::validateCreateReadingRequest(payload).empty());
+
+  // Zero is also valid
+  payload["temperature"] = 0.0;
+  EXPECT_TRUE(ValidationService::validateCreateReadingRequest(payload).empty());
+}
+
+TEST(ValidationServiceTest, RejectsCreateReadingRequestWithInfinityOrNaN) {
+  Json::Value payload;
+  payload["sensorId"] = "sensor-1";
+  payload["timestamp"] = "2026-04-25T10:15:00Z";
+
+  // Test Infinity
+  payload["temperature"] = std::numeric_limits<double>::infinity();
+  auto errors = ValidationService::validateCreateReadingRequest(payload);
+  ASSERT_FALSE(errors.empty());
+  EXPECT_NE(ValidationService::joinErrors(errors).find("must be a finite number"),
+            std::string::npos);
+
+  // Test NaN
+  payload["temperature"] = std::numeric_limits<double>::quiet_NaN();
+  errors = ValidationService::validateCreateReadingRequest(payload);
+  ASSERT_FALSE(errors.empty());
+  EXPECT_NE(ValidationService::joinErrors(errors).find("must be a finite number"),
+            std::string::npos);
+}
+
+TEST(ValidationServiceTest, RejectsCreateReadingRequestWithNonNumericMetrics) {
+  Json::Value payload;
+  payload["sensorId"] = "sensor-1";
+  payload["timestamp"] = "2026-04-25T10:15:00Z";
+
+  // String instead of number
+  payload["temperature"] = "22.5";
+  auto errors = ValidationService::validateCreateReadingRequest(payload);
+  ASSERT_FALSE(errors.empty());
+  EXPECT_NE(ValidationService::joinErrors(errors).find(
+                "Field 'temperature' must be numeric"),
+            std::string::npos);
+
+  // Boolean instead of number
+  payload.removeMember("temperature");
+  payload["humidity"] = true;
+  errors = ValidationService::validateCreateReadingRequest(payload);
+  ASSERT_FALSE(errors.empty());
+  EXPECT_NE(ValidationService::joinErrors(errors).find(
+                "Field 'humidity' must be numeric"),
             std::string::npos);
 }
 
