@@ -54,6 +54,15 @@ If GoogleTest is not already installed on the machine, CMake will fetch it autom
 
 ### 3. Run
 
+For local development, make sure PostgreSQL is running:
+
+```bash
+brew services start postgresql@16
+```
+
+If the API starts before Postgres is ready, the service retries for up to ~20s
+before failing.
+
 ```bash
 ./build/weather_data
 ```
@@ -81,20 +90,11 @@ curl -X POST http://localhost:8080/api/v1/readings \
 curl "http://localhost:8080/api/v1/metrics?sensorId=sensor-1&metric=temperature&stat=avg"
 ```
 
-For local development, make sure PostgreSQL is running:
-
-```bash
-brew services start postgresql@16
-```
-
 ## Database
 
-Schema management is handled automatically by the built-in migration system.
-
-- Migrations live in `db/migrations/` as numbered `.sql` files.
-- The service runs pending migrations on startup before the API starts.
-
-Initial schema: `001_initial_schema.sql` (sensors and readings tables).
+This project does not use versioned migrations. The schema is bootstrapped from
+`db/migrations/001_initial_schema.sql` on startup using idempotent
+`CREATE ... IF NOT EXISTS` sql queries.
 
 ## Testing
 

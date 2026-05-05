@@ -56,8 +56,8 @@ The schema uses dedicated columns for metrics (`temperature`, `humidity`, `wind_
 - **Type Safety**: Metrics are stored as double precision, ensuring data integrity.
 - **Simplicity**: Simplifies the C++ model mapping and keeps SQL queries readable.
 
-### Automated Database Migrations
-A custom-built `DatabaseMigrationService` is integrated into the application startup:
+### Automated Database Schema Bootstrap
+The service bootstraps the schema from `db/migrations/001_initial_schema.sql` at startup using idempotent sql queries:
 - **Consistency**: Guarantees that every instance of the service (Dev, CI, Prod) runs on an identical schema.
 - **Onboarding**: Removes the need for manual SQL schema setup for new developers.
 
@@ -202,7 +202,7 @@ Status codes used:
 .
 ├── CMakeLists.txt
 ├── config/             # Configuration files
-├── db/                 # Database migrations
+├── db/                 # Database schema (bootstrap)
 ├── src/
 │   ├── controllers/    # HTTP Request handlers
 │   ├── models/         # DTOs and internal models
@@ -228,7 +228,7 @@ Status codes used:
   - pagination
   - caching
 - **Deployment**:
-  - Move to Docker Compose for containerized deployment of API and Postgres.
+  - containerized deployment.
 - **Security**:
   - JWT-based authentication
   - rate limiting.
