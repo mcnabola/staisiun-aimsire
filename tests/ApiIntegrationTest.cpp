@@ -10,7 +10,7 @@
 #include <cstdlib>
 #include <string>
 #include <thread>
-#include "services/DatabaseMigrationService.hpp"
+#include "services/DatabaseSchemaService.hpp"
 
 namespace {
 
@@ -63,8 +63,8 @@ IntegrationConfig loadConfig() {
 }
 
 void applySchema(const drogon::orm::DbClientPtr &dbClient) {
-    std::string migrationsPath = WEATHER_DATA_SOURCE_DIR "/db/migrations";
-    weather_data::services::DatabaseMigrationService::runMigrations(dbClient, migrationsPath);
+    std::string schemaPath = WEATHER_DATA_SOURCE_DIR "/db/migrations/001_initial_schema.sql";
+    weather_data::services::DatabaseSchemaService::ensureSchema(dbClient, schemaPath);
 }
 
 void cleanDatabase(const drogon::orm::DbClientPtr &dbClient) {

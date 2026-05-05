@@ -69,7 +69,7 @@ add_executable(${PROJECT_NAME}
     src/services/ReadingService.cpp
     src/services/MetricsService.cpp
     src/repositories/ReadingRepository.cpp
-    src/services/DatabaseMigrationService.cpp
+    src/services/DatabaseSchemaService.cpp
 )
 
 target_include_directories(${PROJECT_NAME}
@@ -108,7 +108,7 @@ if(BUILD_TESTING)
         src/controllers/MetricsController.cpp
         src/services/MetricsService.cpp
         src/repositories/ReadingRepository.cpp
-        src/services/DatabaseMigrationService.cpp
+        src/services/DatabaseSchemaService.cpp
     )
 
     target_include_directories(${PROJECT_NAME}_tests
@@ -131,7 +131,7 @@ if(BUILD_TESTING)
         src/services/ReadingService.cpp
         src/services/MetricsService.cpp
         src/repositories/ReadingRepository.cpp
-        src/services/DatabaseMigrationService.cpp
+        src/services/DatabaseSchemaService.cpp
     )
 
     target_include_directories(${PROJECT_NAME}_integration_tests
